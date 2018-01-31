@@ -8,6 +8,12 @@ import leveldensities as lden
 Copied from uct2017b/Sm154
 """
 
+def DefineParameters(sig,sign,sigw):
+    global sigexpt,sigsmn,sigsm
+    sigexpt=sig
+    sigsmn=sign
+    sigsm=sigw
+
 def PlotSpectrum(nfig,X,G,Gs,ROIlo,ROIhi,A,incounts=True):
     incounts=True
     curfig=plt.figure(nfig)
@@ -36,17 +42,17 @@ def PlotSpectrum(nfig,X,G,Gs,ROIlo,ROIhi,A,incounts=True):
 
 
 def PlotACs(nfig, i, X,Ac, Act, NACbins, Nac, meanE, targetname, NarrowSmooth):
-    plt.figure(nfig)
+    plt.figure(nfig+i)
     plt.suptitle(targetname)
-    axx=plt.subplot(int(NACbins/3+0.7),3,1+i)
+    #axx=plt.subplot(int(NACbins/3),3,1+i)
     Nacd2=Nac#//2
-    plt.plot(X[0:Nacd2]-X[0],Ac[0:Nacd2],'b-',drawstyle='steps-mid',label="mean E=%4.1f"%(meanE,))
+    plt.plot(X[0:Nacd2]-X[0],Ac[0:Nacd2],'b-',lw=0.9,drawstyle='steps-mid',label="mean E=%4.1f"%(meanE,))
     if not NarrowSmooth: plt.plot(X[0:2]-X[0],Ac[0:2],'bo')
     plt.xlabel('Energy offset [MeV]')
     plt.ylabel('Autocorrelation')
 
     # plot Hansen formula
-    plt.plot(X[0:Nacd2]-X[0],Act[0:Nacd2],'r-')
+    plt.plot(X[0:Nacd2]-X[0],Act[0:Nacd2],'r-',lw=0.9)
     plt.xlim(X[0]-X[0],X[Nacd2-1]-X[0])
     plt.legend()
 
@@ -91,11 +97,11 @@ def PlotLevelDensities(nfig,N,Z,A,Ed,Dd,Ddl,Ddh,Ex, Exlo, Exhi):
     plt.ylabel(r'Level density [Mev$^{-1}$]')
     plt.xlim(Exlo,Exhi)
     ##plt.xlim(11.0,20.0) #40Ca
-    plt.text(0.1,0.8,r"$^{%i}$Sm(p,p')"%A,fontsize=18,transform=plt.gca().transAxes)
-    plt.text(0.1,0.7,r"Preliminary",fontsize=22,color='r',transform=plt.gca().transAxes)
-    #plt.text(0.1,0.7,
-    #         r"$\sigma=%5.3f, \sigma_</\sigma=%5.3f, \sigma_>/\sigma=%5.3f$"%(sigexpt,sigsmn/sigexpt/2.3,sigsm/sigexpt),
-    #         transform=plt.gca().transAxes)
+    plt.text(0.1,0.9,r"$^{%i}$Sm(p,p')"%A,fontsize=18,transform=plt.gca().transAxes)
+    plt.text(0.1,0.82,r"Preliminary",fontsize=18,color='r',transform=plt.gca().transAxes)
+    plt.text(0.05,0.75,
+             r"$\sigma=%5.3f, \sigma_</\sigma=%5.3f, \sigma_>/\sigma=%5.3f$"%(sigexpt,sigsmn/sigexpt/2.3,sigsm/sigexpt),
+             transform=plt.gca().transAxes)
     plt.legend(loc=4)
     plt.title(r"Level densities")
     #plt.savefig(os.path.join(outputdirname,"%s%sfig3.png"%(targetbase,targetangle)))

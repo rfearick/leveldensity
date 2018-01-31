@@ -14,7 +14,6 @@ import leveldensities as lden
 from leveldensityanalysisplots import *
 from scipy.special import erfc
 
-
 ##plt.rc('text',usetex=True)
 ##plt.rc('mathtext',default='rm')
 ##plt.rc('font', family='serif', size=12.0)
@@ -22,7 +21,7 @@ from scipy.special import erfc
 ##plt.rc('legend',fontsize='small')
 ##plt.rc('font',**{'family':'serif','serif':['Computer Modern Roman']})
 
-plt.rc('font',size=14)
+plt.rc('font',size=10)
 
 # shorthand function calls
 pi=np.pi
@@ -31,7 +30,7 @@ cos=np.cos
 sin=np.sin
 exp=np.exp
 
-versiondate="21/8/2017"
+versiondate="19/12/2017"
 versionname="leveldensitywithnoise.py"
 
 #rnd.seed( 1213141516 )  # fix state of RNG
@@ -141,10 +140,10 @@ def Hansen2(x, D, sig, alpha, sigsm):
     11/7/2012: fix 4->2 in last term
     """
     global sigsmn, sigsm0
-    sige=np.sqrt(sig**2-sigsmn**2)
-    sigw=np.sqrt(sige**2+sigsm0**2)
-    ys=sigw/sig
-    #print(ys)
+    #sige=np.sqrt(sig**2-sigsmn**2)
+    #sigw=np.sqrt(sige**2+sigsm0**2)
+    #ys=sigw/sig
+    ys=sigsm/sig
     ysp=1.+ys*ys
     act=(1.0/(2.0*np.sqrt(np.pi)*sig))*(alpha*D)*np.exp(-x*x/(4.*sig*sig))
     act+=(1.0/(2.0*np.sqrt(np.pi)*sig*ys))*(alpha*D)*np.exp(-x*x/(4.*sig*sig*ys*ys))
@@ -202,11 +201,11 @@ def findzeros(array):
 lineshape=sim.gauss
 
 # do we use narrow smoothing as well as wide?
-NarrowSmooth=True
+NarrowSmooth=False
 
 # set smoothing parameters in channels
 smoothwide=3.5 # from 3.5
-smoothnarrow=0.1*2.35
+smoothnarrow=0.39*2.35
 
 alpha=2.0+0.273            # default for N=1
 
@@ -234,6 +233,7 @@ for targetname in [nucleus]:
     sigsm=smoothwide*sig       # in MeV
     sigexpt=sig
     sigsm0=sigsm
+    DefineParameters(sig,sigsmn if NarrowSmooth else 0.0,sigsm)
 
     # we have only one angle ...
     for targetangle in ["00"]: 
@@ -398,9 +398,11 @@ for targetname in [nucleus]:
         varn=[]
         ##sig=0.035 # !!!!!!!!!!!!!!!!!!!
         sig0=sig  # keep an initial value for fits
+        sig0=0.033
         for i,lh in enumerate(lohi[:-1]):
             for slide in range(0,dAC,dAC//NACslides):  # implement sliding window
                 sig=sig0
+                #sig0+=0.001
                 # loop over windows to get AC and LD
                 AClo,AChi=lh
                 AClo+=slide
@@ -483,7 +485,8 @@ for targetname in [nucleus]:
                 zerolist=findzeros(Ac)
                 #if slide==0:print("zerolist",zerolist)
                 #Nacf=zerolist[0]+1 # add a bit ...
-                Xac=Xratio[AClo+iAC:AClo+Nacf]-Xratio[AClo+iAC]
+                #Xac=Xratio[AClo+iAC:AClo+Nacf]-Xratio[AClo+iAC]
+                Xac=Xratio[AClo+iAC:AClo+Nacf]-Xratio[AClo]
                 ACf=Ac[iAC:Nacf]
                 #noisecorrection=varnoise*Csq(Xac,signoise*2.0,de/2.)
                 noisecorrection=varnoise*signoise*actheory(Xac,signoise,sigsm0)#np.exp(-Xac**2/(4.0*signoise**2))
@@ -498,10 +501,10 @@ for targetname in [nucleus]:
                     ys=sigw/sig
                     sigsm=sigw
                     print("fit 2 out: sige, sig, ys %6.3f %6.3f %6.2f"%(sige,sig,ys))
+                    if sige<sigsmn: continue
                 else:
                     popt,pcov=curve_fit(fitf, Xac, ACf, p0=[initialD])
                 # breakout 
-                if sige<sigsmn: continue
                 # ----------------------
                 fitD=popt[0]#*(sig/sigaim)
 
@@ -574,7 +577,7 @@ for targetname in [nucleus]:
                 else:
                     validD=False
 
-                #print("AC**",i+(NAC-1)*slide//(dAC//NACslides),i,slide,NACslides,alpha)
+                print("AC**",i+(NAC-1)*slide//(dAC//NACslides),i,slide,NACslides,alpha)
                 #if i+slide*NACslides>NACbins*2: continue
                 #if slide>0: continue    # only plot for first pass
                 #print("** i",i)
@@ -582,11 +585,13 @@ for targetname in [nucleus]:
                 if validD:
                     # plot autocorrelation results as we go ...
                     #Act[iAC:Nacf]+=noisecorrection
-                    PlotACs(10, i+(NAC-1)*slide//(dAC//NACslides), X,Ac, Act, NAC*NACslides, Nac, meanE, targetname, NarrowSmooth)
+                    PlotACs(100, i+(NAC-1)*slide//(dAC//NACslides), X,Ac, Act, NAC*NACslides, Nac, meanE, targetname, NarrowSmooth)
                     plt.plot(Xac,ACf,'m-',drawstyle='steps-mid')
                     if NarrowSmooth:
                         Act[iAC:Nacf]+=noisecorrection
                         plt.plot(Xac,Act,'g-')
+                    plt.text(0.5,0.8,r"sig %5.3f"%sig,fontsize=10,transform=plt.gca().transAxes)
+
 
                 
         #plt.savefig(os.path.join(outputdirname,"%s%sfig2.png"%(targetbase,targetangle)))
