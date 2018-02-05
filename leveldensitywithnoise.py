@@ -8,11 +8,11 @@ import scipy.signal as signal
 import os
 import sys
 from scipy.optimize import curve_fit
+from scipy.special import erfc
 
 import simlib1 as sim
 import leveldensities as lden
 from leveldensityanalysisplots import *
-from scipy.special import erfc
 
 ##plt.rc('text',usetex=True)
 ##plt.rc('mathtext',default='rm')
@@ -222,8 +222,8 @@ for targetname in [nucleus]:
     # take sig to be what Andi thinks -- this does need to be experimental sig
     # -- note: can't rely on AC function to produce correct value !! See notes.
     esig,sig=0.0,50.0 # fwhm of experimental resolution in keV  <<<<<<<<<<<<<<<<<<<<<<<<<
-    print("Assumed fwhm of resolution fn is %5.1f keV"%(sig))
-    print(":Smooth factors: wide %5.1f; narrow %5.2f"%(smoothwide,smoothnarrow))
+    print("Assumed fwhm of resolution fn is %6.3f keV"%(sig))
+    print("Smooth factors: wide %6.3f; narrow %6.3f"%(smoothwide,smoothnarrow))
     # convert to sdev of gaussian in MeV
     sig/=1000.0   # sig in MeV
     sig/=2.35      # FWHM to stdev
@@ -233,6 +233,7 @@ for targetname in [nucleus]:
     sigsm=smoothwide*sig       # in MeV
     sigexpt=sig
     sigsm0=sigsm
+    print("Calculated: sig wide %6.3f; sig narrow %6.3f"%(sigsm,sigsmn))
     DefineParameters(sig,sigsmn if NarrowSmooth else 0.0,sigsm)
 
     # we have only one angle ...
@@ -266,7 +267,7 @@ for targetname in [nucleus]:
         
         # *** Read in data
         try:
-            print(path+targetfilename)
+            print("data input from ",path+targetfilename)
             e,cs0=np.loadtxt(path+targetfilename,unpack=True,usecols=(0,1))
             #e,cs0=np.loadtxt(path+"../Sm154/"+"data_154Sm_all_5keV.dat",unpack=True,usecols=(0,1))
             ##e,cs0=np.loadtxt(path+"cs_full_3deg.dat",unpack=True,usecols=(0,1))
@@ -298,9 +299,9 @@ for targetname in [nucleus]:
         Nlo=ROIlo
         Nhi=ROIhi
         Exlo,Exhi=(e[ROIlo],e[ROIhi])
-        print(Exlo,Exhi)
+        print("Region of interest ",Exlo,' to ',Exhi, ' MeV')
 
-        print("ROI for analysis",targetbase, Nlo, Nhi, ROIlo, ROIhi)
+        #print("ROI for analysis",targetbase, Nlo, Nhi, ROIlo, ROIhi)
 
         # *** background subtraction
         #THERE IS NO BACKGROUND 
@@ -343,23 +344,23 @@ for targetname in [nucleus]:
         allAC=sim.autocorrelation(Gratio)
         #Grxx=Gratio-np.mean(Gratio)
         #allAC2=np.correlate(Grxx,Grxx,mode="same")[0:len(Gratio)]/len(Gratio)#-1.0
-        print("AC***",np.shape(allAC),np.shape(Gratio))
+        #print("AC***",np.shape(allAC),np.shape(Gratio))
         widthROId2=widthROI//2
         zerolist=findzeros(allAC)
         widthROId2=zerolist[1]+1
-        print("allAC fit2 in",alpha,ys,widthROId2)
+        print("allAC fit2 input ",alpha,ys,widthROId2)
         ###ys=3.9716 ####
         initialD=allAC[iAC]/sim.Hansen(hansen0,1.0,sig,alpha, ys)
         fitX=Xratio[iAC:widthROId2]-Xratio[0]
         fitallAC=allAC[iAC:widthROId2]
         popt,pcov=curve_fit(fitf2, fitX, fitallAC, p0=[initialD,sig])
-        print("Derived resolution sigold, signew, fwhm is %f6,3, %6.3f, %6.3f"%(sig,popt[1], popt[1]*2.3))
+        print("Derived resolution sigold, signew, fwhm is %f6.3, %6.3f, %6.3f"%(sig,popt[1], popt[1]*2.3))
         # plot AC of full ROI
         PlotFullAC(11, Xratio,allAC,popt,alpha,sig,sigsm,initialD,A)
         
         # update sig
         sig=popt[1]
-        print("sig reset to ",sig)
+        print("sig reset to ",sig, " after fit to full region")
         #sig=0.040/2.3 # force a value  <<<<<<<<<<<<<<<<<<<<<<<<<
 
                 # plots: 1 ----------------------------
@@ -383,7 +384,7 @@ for targetname in [nucleus]:
             AClo+=offsetAC
             AChi+=offsetAC
         NACbins=len(lohi)  # no. of autocorrelation bins
-        print("AC bins",lenGr,dAC,offsetAC)
+        print("AC bin sizes",lenGr,dAC,offsetAC)
 
         # prepare to plot autocorrelations in loop
         # save:
@@ -410,8 +411,11 @@ for targetname in [nucleus]:
                 # calculate autocorrelation in current bin
                 Gw=Gratio[AClo:AChi]
                 Gw0=Gratio0[AClo:AChi]
-                if slide==0:print()
-                if slide==0:print("AC no.:",i,AClo,AChi,AChi-AClo,len(Gw)," range(MeV)",X[ROIlo+AClo],X[ROIlo+AChi])
+                if slide==0:
+                    print()
+                    print("AC no.:",i,AClo,AChi,AChi-AClo,len(Gw)," range(MeV)",X[ROIlo+AClo],X[ROIlo+AChi])
+                else:
+                    print()
                 if len(Gw) != AChi-AClo: break
                 Ac=sim.autocorrelation(Gw)
                 # correct for noise
@@ -423,7 +427,7 @@ for targetname in [nucleus]:
                 signoise=sigsmn
                 f1=2.0*np.sqrt(np.pi)*(signoise/de) 
                 varnoise=varnoise0/f1
-                print("noise",varGw0,varnoise0,varnoise, Ac0[0], Ac[0])
+                print("noise %8.5f %8.5f %8.5f %8.5f %8.5f"%(varGw0,varnoise0,varnoise, Ac0[0], Ac[0]))
                 if varnoise>Ac[0]: continue
                 #print("Noise",Ac[0],varnoise,Ac0[0],Ac0[1],f1,f1*meanG**2)
                 # 
@@ -470,7 +474,6 @@ for targetname in [nucleus]:
                     #if meanM1<0.15: alpha=2.27
                 else:
                     alpha=2.27
-                    
                 ####alpha=alpha+1
                 # fit hansen formula to data
                 Nac=dAC//2            # meaningful range of AC is 0.5 bin
@@ -491,7 +494,7 @@ for targetname in [nucleus]:
                 #noisecorrection=varnoise*Csq(Xac,signoise*2.0,de/2.)
                 noisecorrection=varnoise*signoise*actheory(Xac,signoise,sigsm0)#np.exp(-Xac**2/(4.0*signoise**2))
                 if NarrowSmooth: ACf=ACf-noisecorrection
-                print("fit1 in",sig,alpha,ys, Nacf)
+                print("fit 2 in: sig, alpha, ys, Nacf %6.3f %6.3f %6.3f %d"%(sig,alpha,ys, Nacf))
                 if fit2params:
                     popt,pcov=curve_fit(fitf2, Xac, ACf, p0=[initialD,sig])
                     sig=popt[1]
@@ -515,7 +518,7 @@ for targetname in [nucleus]:
                 varn.append(varnoise)
                 # D is level spacing of all multipolarities; must reduce for just one
                 Dlev=fitD      # keep copy for plot
-                print("fitD",fitD0,fitD)
+                print("fitted D",fitD0,fitD)
                 Ntypes=1
                 if M1fractions:
                     Ntypes=2
@@ -552,7 +555,7 @@ for targetname in [nucleus]:
                 if slide==0:
                     h=sim.Hansen(0.0,1.0,sig,alpha, ys)
                     #print("levden",1.0/meanD, h, Ac[iAC],std,h/Ac[iAC]/Ntypes,h/(Ac[iAC]-std)/2,h/(Ac[iAC]+std)/2)
-                    print("levden", levelden, (leveldenh-leveldenl)/2, (ld2h-ld2l)/2,leveldenh,leveldenl)
+                    #print("levden", levelden, (leveldenh-leveldenl)/2, (ld2h-ld2l)/2,leveldenh,leveldenl)
 
                 # now set up to plot
                 # Hansen formula
@@ -577,7 +580,7 @@ for targetname in [nucleus]:
                 else:
                     validD=False
 
-                print("AC**",i+(NAC-1)*slide//(dAC//NACslides),i,slide,NACslides,alpha)
+                print("AC**",i+(NAC-1)*slide//(dAC//NACslides),i,slide,NACslides,"alpha=%5.2f"%(alpha,))
                 #if i+slide*NACslides>NACbins*2: continue
                 #if slide>0: continue    # only plot for first pass
                 #print("** i",i)
