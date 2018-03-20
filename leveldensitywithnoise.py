@@ -201,7 +201,7 @@ def findzeros(array):
 lineshape=sim.gauss
 
 # do we use narrow smoothing as well as wide?
-NarrowSmooth=False
+NarrowSmooth=True
 
 # set smoothing parameters in channels
 smoothwide=3.5 # from 3.5
@@ -399,7 +399,7 @@ for targetname in [nucleus]:
         varn=[]
         ##sig=0.035 # !!!!!!!!!!!!!!!!!!!
         sig0=sig  # keep an initial value for fits
-        sig0=0.033
+        sig0=0.025
         for i,lh in enumerate(lohi[:-1]):
             for slide in range(0,dAC,dAC//NACslides):  # implement sliding window
                 sig=sig0
@@ -469,7 +469,7 @@ for targetname in [nucleus]:
                         b=1.0/a
                         aIg=alphaIg(a,b)
                         aIg2=3.0*meanM1**2*(1.0+(1.0/meanM1-1)**2)*2-1  # from Kilgus: gives same result! 
-                        if slide==0:print( "M1 fraction",meanM1," alphaIg:",aIg,aIg2," ys:",ys)
+                        print( "M1 fraction",meanM1," alphaIg:",aIg,aIg2," ys:",ys)
                         alpha=aIg+0.52  # add alphaD
                     #if meanM1<0.15: alpha=2.27
                 else:
@@ -487,7 +487,7 @@ for targetname in [nucleus]:
                 Nacf=(AChi-AClo)//2
                 zerolist=findzeros(Ac)
                 #if slide==0:print("zerolist",zerolist)
-                #Nacf=zerolist[0]+1 # add a bit ...
+                Nacf=(zerolist[1]+5)//2 # add a bit ...
                 #Xac=Xratio[AClo+iAC:AClo+Nacf]-Xratio[AClo+iAC]
                 Xac=Xratio[AClo+iAC:AClo+Nacf]-Xratio[AClo]
                 ACf=Ac[iAC:Nacf]
@@ -495,7 +495,9 @@ for targetname in [nucleus]:
                 noisecorrection=varnoise*signoise*actheory(Xac,signoise,sigsm0)#np.exp(-Xac**2/(4.0*signoise**2))
                 if NarrowSmooth: ACf=ACf-noisecorrection
                 print("fit 2 in: sig, alpha, ys, Nacf %6.3f %6.3f %6.3f %d"%(sig,alpha,ys, Nacf))
+                print("fit 2 in: sigsm, sigsm0 %6.3f %6.3f"%(sigsm,sigsm0))
                 if fit2params:
+                    uncert=np.linspace(ACf[0]/10,ACf[0]/5,Nacf)
                     popt,pcov=curve_fit(fitf2, Xac, ACf, p0=[initialD,sig])
                     sig=popt[1]
                     sige=np.sqrt(sig**2-sigsmn**2)
@@ -519,6 +521,7 @@ for targetname in [nucleus]:
                 # D is level spacing of all multipolarities; must reduce for just one
                 Dlev=fitD      # keep copy for plot
                 print("fitted D",fitD0,fitD)
+                if np.isnan(fitD) or np.isnan(fitD0): continue
                 Ntypes=1
                 if M1fractions:
                     Ntypes=2
@@ -592,7 +595,7 @@ for targetname in [nucleus]:
                     plt.plot(Xac,ACf,'m-',drawstyle='steps-mid')
                     if NarrowSmooth:
                         Act[iAC:Nacf]+=noisecorrection
-                        plt.plot(Xac,Act,'g-')
+                        plt.plot(X[0:Nac]-X[0],Act,'g-')
                     plt.text(0.5,0.8,r"sig %5.3f"%sig,fontsize=10,transform=plt.gca().transAxes)
 
 
