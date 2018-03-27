@@ -13,6 +13,7 @@ from scipy.special import erfc
 import simlib1 as sim
 import leveldensities as lden
 from leveldensityanalysisplots import *
+import spectrumtools as tools
 
 ##plt.rc('text',usetex=True)
 ##plt.rc('mathtext',default='rm')
@@ -173,8 +174,9 @@ def fitf(Xac,D):
     global sig,alpha,ys
     return sim.Hansen(Xac, D,sig,alpha,ys)
 def fitf2(Xac,D,sig):
-    global alpha,sigsm
-    return Hansen2(Xac, D,sig,alpha,sigsm)
+    global alpha,sigsm,sigx,initialD
+    return Hansen2(Xac, D*initialD,sig,alpha,sigsm)*np.exp(-Xac**2/(2.0*sigx**2))
+
 def fitf3(Xac,D,sig, sigsm):
     global alpha
     return sim.Hansen2(Xac, D,sig,alpha,sigsm)
@@ -201,7 +203,7 @@ def findzeros(array):
 lineshape=sim.gauss
 
 # do we use narrow smoothing as well as wide?
-NarrowSmooth=True
+NarrowSmooth=False
 
 # set smoothing parameters in channels
 smoothwide=3.5 # from 3.5
@@ -221,7 +223,7 @@ for targetname in [nucleus]:
     
     # take sig to be what Andi thinks -- this does need to be experimental sig
     # -- note: can't rely on AC function to produce correct value !! See notes.
-    esig,sig=0.0,50.0 # fwhm of experimental resolution in keV  <<<<<<<<<<<<<<<<<<<<<<<<<
+    esig,sig=0.0,50.0 # fwhm of experimental resolution in keV  <<<<<<<<<<<<<<<<<<<<
     print("Assumed fwhm of resolution fn is %6.3f keV"%(sig))
     print("Smooth factors: wide %6.3f; narrow %6.3f"%(smoothwide,smoothnarrow))
     # convert to sdev of gaussian in MeV
@@ -233,6 +235,7 @@ for targetname in [nucleus]:
     sigsm=smoothwide*sig       # in MeV
     sigexpt=sig
     sigsm0=sigsm
+    sigx=sigsm0*2.5
     print("Calculated: sig wide %6.3f; sig narrow %6.3f"%(sigsm,sigsmn))
     DefineParameters(sig,sigsmn if NarrowSmooth else 0.0,sigsm)
 
@@ -264,7 +267,7 @@ for targetname in [nucleus]:
         
         ROIlo=ROIlo+50
         ROIhi=ROIhi+50
-        
+
         # *** Read in data
         try:
             print("data input from ",path+targetfilename)
@@ -295,6 +298,7 @@ for targetname in [nucleus]:
             print("File not found",targetfilename)
             sys.exit(3)
         
+
         Nspect=len(G)
         Nlo=ROIlo
         Nhi=ROIhi
@@ -306,7 +310,7 @@ for targetname in [nucleus]:
         # *** background subtraction
         #THERE IS NO BACKGROUND 
         bkg=0.0
-
+        """
         if NarrowSmooth:
             Gn=sim.convolute(G, lineshape, sigsmn/de)
             iAC=0             # first point in autocorrelation fit
@@ -320,7 +324,7 @@ for targetname in [nucleus]:
         # smooth spectrum by convoluting with gaussian of width sigsm channels: g_>
         Gs=sim.convolute(G, lineshape, sigsm/de)
         Gs[Gs<0.2]=0.2  #  lower limit (prevents div by zeros) needs more thought ...
-
+        """
         # increase sig to account for convolution of g
         # note that the actual value depends on sig!
         sigw=np.sqrt(sig**2+sigsm**2)#sqrt(1.25)*sig
@@ -330,7 +334,7 @@ for targetname in [nucleus]:
         ys=sigw/sig
         print("fluctuation parameters sigsm:%6.3f, sig:%6.3f, sigsmn:%6.3f, ys:%6.2f"%(sigsm,sig,sigsmn,ys))
         print("fluctuation parameters fwhm. sigsm: %6.3f, sig: %6.3f, sigsmn: %6.3f"%(sigsm*2.3,sig*2.3, sigsmn*2.3))
-
+        """
         # make ratio spectrum in full ROI
         widthROI=ROIhi-ROIlo
         TG=G[ROIlo:ROIhi]
@@ -339,6 +343,24 @@ for targetname in [nucleus]:
         Gratio0=G[ROIlo:ROIhi]/Gs[ROIlo:ROIhi]
         Gratio=Gn[ROIlo:ROIhi]/Gs[ROIlo:ROIhi]
         Xratio=X[ROIlo:ROIhi]
+        """
+        widthROI=ROIhi-ROIlo
+        S=tools.RatioSpectrum( X, G, targetfilename, ROIlo, ROIhi )
+        S.makeRatioSpectra( sigsmn*1000.0, sigsm*1000.0 )
+        if NarrowSmooth:
+            Gratio=S.rationar
+            iAC=0
+            hansen0=0.0
+        else:
+            Gratio=S.ratioraw
+            iAC=1
+            hansen0=de
+        Xratio=S.Eratio
+        Gs=S.gwide
+        Gratio0=S.ratioraw
+        TG=S.gROI
+        TS=S.gROIw
+        TGn=S.gROIn
         
         # find basic details from full autocorrelation
         allAC=sim.autocorrelation(Gratio)
@@ -353,7 +375,8 @@ for targetname in [nucleus]:
         initialD=allAC[iAC]/sim.Hansen(hansen0,1.0,sig,alpha, ys)
         fitX=Xratio[iAC:widthROId2]-Xratio[0]
         fitallAC=allAC[iAC:widthROId2]
-        popt,pcov=curve_fit(fitf2, fitX, fitallAC, p0=[initialD,sig])
+        initial=1.0
+        popt,pcov=curve_fit(fitf2, fitX, fitallAC, p0=[initial,sig])
         print("Derived resolution sigold, signew, fwhm is %f6.3, %6.3f, %6.3f"%(sig,popt[1], popt[1]*2.3))
         # plot AC of full ROI
         PlotFullAC(11, Xratio,allAC,popt,alpha,sig,sigsm,initialD,A)
@@ -487,7 +510,7 @@ for targetname in [nucleus]:
                 Nacf=(AChi-AClo)//2
                 zerolist=findzeros(Ac)
                 #if slide==0:print("zerolist",zerolist)
-                Nacf=(zerolist[1]+5)//2 # add a bit ...
+                #Nacf=(zerolist[1]+5)//2 # add a bit ...
                 #Xac=Xratio[AClo+iAC:AClo+Nacf]-Xratio[AClo+iAC]
                 Xac=Xratio[AClo+iAC:AClo+Nacf]-Xratio[AClo]
                 ACf=Ac[iAC:Nacf]
@@ -498,8 +521,11 @@ for targetname in [nucleus]:
                 print("fit 2 in: sigsm, sigsm0 %6.3f %6.3f"%(sigsm,sigsm0))
                 if fit2params:
                     uncert=np.linspace(ACf[0]/10,ACf[0]/5,Nacf)
-                    popt,pcov=curve_fit(fitf2, Xac, ACf, p0=[initialD,sig])
+                    ACfx=ACf*np.exp(-Xac**2/(2.0*sigx**2))
+                    initial=1.0
+                    popt,pcov=curve_fit(fitf2, Xac, ACf, p0=[initial,sig])
                     sig=popt[1]
+                    popt[0]*=initialD
                     sige=np.sqrt(sig**2-sigsmn**2)
                     sigw=np.sqrt(sige**2+sigsm0**2)
                     #print("sigs",sig,sige,sigsm,sigw)
@@ -593,6 +619,7 @@ for targetname in [nucleus]:
                     #Act[iAC:Nacf]+=noisecorrection
                     PlotACs(100, i+(NAC-1)*slide//(dAC//NACslides), X,Ac, Act, NAC*NACslides, Nac, meanE, targetname, NarrowSmooth)
                     plt.plot(Xac,ACf,'m-',drawstyle='steps-mid')
+                    plt.plot(Xac,np.exp(-Xac**2/(2.0*sigx**2))*ACf[0])
                     if NarrowSmooth:
                         Act[iAC:Nacf]+=noisecorrection
                         plt.plot(X[0:Nac]-X[0],Act,'g-')
