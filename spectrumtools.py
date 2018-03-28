@@ -57,6 +57,25 @@ def findminmax(energy, data):
                 maxlist.append(data[i])
     return minenergy,maxenergy,minlist,maxlist
 
+def AC_theory( e, sign, sigw ):
+    """
+    Theoretical function for autocorrelation.
+    e: energy offset (MeV)
+    sign: narrow smooth
+    sigw: wide smooth
+    """
+    ys=sigw/sign
+    ysp=1.+ys*ys
+    act=(np.exp(-e*e/(4.*sign*sign))+
+         np.exp(-e*e/(4.*sign*sign*ys*ys))/ys-
+         np.sqrt(8./ysp)*np.exp(-e*e/(2.*sign*sign*ysp)))/sign
+    #act=(1.0/sign)*np.exp(-x*x/(4.*sign*sign))
+    #act+=(1.0/(sign*ys))*np.exp(-x*x/(4.*sign*sign*ys*ys))
+    #act-=(1.0/sign)*np.sqrt(8./ysp)*np.exp(-x*x/(2.*sign*sign*ysp))
+    return act
+
+    
+
 class Spectrum(object):
     """
     Spectrum:        hold basic data for spectrum read in from file.
@@ -222,10 +241,17 @@ class Bin(object):
         self.acnar=sim.autocorrelation(self.datanar)
         self.energy=data.energy[l:h]
         self.Eoffset=self.energy-self.energy[0]
+
+    def get_noise_correction(self, signoise, sigsm):
+        de=self.energy[1]-self.energy[0]
+        varnoise0 = self.acraw[0]-self.acraw[1]
+        #print(de, signoise, sigsm, varnoise0)
+        varnoisesm = varnoise0/(2.0*np.sqrt(np.pi)*(signoise/de))
+        noisecorrection = varnoisesm*signoise*AC_theory(self.Eoffset, signoise, sigsm)
+        return noisecorrection
+         
         
                    
-    
-    
 def findstore(subdir):
     p=Path.cwd()
     partlist=list(p.parts)
