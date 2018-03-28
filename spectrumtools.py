@@ -102,8 +102,9 @@ class RatioSpectrum(Spectrum):
         self.ROIhi = ROIhi
         self.Exlo = self.energy[ROIlo]
         self.Exhi = self.energy[ROIhi]
+        self.ExROI = self.energy[ROIlo:ROIhi]
 
-    def makeRatioSpectra(self, signarrow, sigwide):
+    def makeRatioSpectra(self, signarrow, sigwide, energyunit='keV'):
         """
         Make ratio spectra.
         This is separated out as it may be used several times with different parameters.
@@ -112,13 +113,19 @@ class RatioSpectrum(Spectrum):
         
         signarrow: float - narrow smoothing standard deviation in keV
         sigwide:   float - wide smoothing standard deviation in keV
+        energyunit: str  - units for energy -- default 'keV'
         """
 
-        de =self.dekeV
+        if energyunit=='keV':
+            de = self.dekeV
+        elif energyunit == 'MeV':
+            de = self.deMeV
+        else:
+            raise ValueError("Unknown energy units")
         ROIlo = self.ROIlo
         ROIhi = self.ROIhi
 
-        print(sigwide/de)
+        #print(sigwide/de)
         gw = sim.convolute(self.data, sim.gauss, sigwide/de)
         gw[gw<0.2]=0.2  # lower limit (prevents div by zeros) needs more thought ...
         self.gwide = gw
@@ -170,6 +177,7 @@ class ACBinner(object):
         self.NAC=NAC
         self.Noffset=Noffset
         self.Nslides=Nslides
+        self.Ex=self.data.ExROI
         lendata=len(data.gROI)
         dAC=lendata//NAC
         offset=dAC//Noffset
@@ -187,7 +195,16 @@ class ACBinner(object):
         self.offset=offset
         self.slide=slide
         self.lenAC=dAC
-        print(lohi)
+        #print(lohi)
+
+    def get_bins(self):
+        return self.lohi
+
+    def get_bin_limits(self, index):
+        if index < -len(self.lohi) or index >=len(self.lohi):
+            raise ValueError("Index out of range")
+        l,h=self.lohi[index]
+        return (self.Ex[l],self.Ex[h-1])
 
     def genBins(self):
         for (l,h) in self.lohi:
@@ -320,10 +337,6 @@ if __name__ == "__main__":
             plt.xlim(0.0,bin.Eoffset[-1]/4)
             plt.text(0.8,0.8,"%d"%i,transform=plt.gca().transAxes)
             i+=1
-
-        
-
-        
         
         ACn, ACr, pn, pr = S.doAutocorrelation()
 
@@ -356,4 +369,14 @@ if __name__ == "__main__":
         plt.plot(kfft,gsian)
         plt.xlim(0,1000)
         """
+
+        plt.figure(3)
+        l,h=bins.lohi[0]
+        bin=Bin(bins.data,l,h)
+        
+        plt.plot(bin.Eoffset, bin.acnar)
+        plt.xlim(0.0,bin.Eoffset[-1]/4)
+        plt.text(0.8,0.8,"%d"%i,transform=plt.gca().transAxes)
+
+        
         plt.show()
