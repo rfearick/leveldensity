@@ -14,6 +14,8 @@ import simlib1 as sim
 import leveldensities as lden
 from leveldensityanalysisplots import *
 import spectrumtools as tools
+import lmfit
+
 
 ##plt.rc('text',usetex=True)
 ##plt.rc('mathtext',default='rm')
@@ -173,14 +175,38 @@ def actheory(x,sign,sigw):
 def fitf(Xac,D):
     global sig,alpha,ys
     return sim.Hansen(Xac, D,sig,alpha,ys)
+
 def fitf2(Xac,D,sig):
     global alpha,sigsm,sigx,initialD
-    return Hansen2(Xac, D*initialD,sig,alpha,sigsm)*np.exp(-Xac**2/(2.0*sigx**2))
+    return Hansen2(Xac, D,sig,alpha,sigsm)*np.exp(-Xac**2/(2.0*sigx**2))
 
 def fitf3(Xac,D,sig, sigsm):
     global alpha
     return sim.Hansen2(Xac, D,sig,alpha,sigsm)
 
+def fitforlm( params, e, data, unc=None ):
+    """
+    fit function for least sq fit using lmfit
+    """
+    global alpha
+    p=params.valuesdict()
+    D=p['D']
+    sign=p['sign']
+    sigw=p['sigw']
+    sigx=p['sigx']
+    ys=sigw/sign
+    ysp=1.+ys*ys
+    sig=sign
+    model=(1.0/(2.0*np.sqrt(np.pi)*sig))*(alpha*D)*np.exp(-e*e/(4.*sig*sig))
+    model+=(1.0/(2.0*np.sqrt(np.pi)*sig*ys))*(alpha*D)*np.exp(-e*e/(4.*sig*sig*ys*ys))
+    model-=(1.0/(2.0*np.sqrt(np.pi)*sig))*(alpha*D)*np.sqrt(8./ysp)*np.exp(-e*e/(2.*sig*sig*ysp))
+    model*=np.exp(-e*e/(2.0*sigx**2))
+    if unc is None:
+        unc=np.ones(len(data))
+    return (model-data)/unc
+    
+    
+    
 # find zeros in numpy array
 def findzeros(array):
     """
@@ -203,7 +229,7 @@ def findzeros(array):
 lineshape=sim.gauss
 
 # do we use narrow smoothing as well as wide?
-NarrowSmooth=False
+NarrowSmooth=True
 
 # set smoothing parameters in channels
 smoothwide=3.5 # from 3.5
@@ -376,7 +402,7 @@ for targetname in [nucleus]:
         fitX=Xratio[iAC:widthROId2]-Xratio[0]
         fitallAC=allAC[iAC:widthROId2]
         initial=1.0
-        popt,pcov=curve_fit(fitf2, fitX, fitallAC, p0=[initial,sig])
+        popt,pcov=curve_fit(fitf2, fitX, fitallAC, p0=[initialD,sig])
         print("Derived resolution sigold, signew, fwhm is %f6.3, %6.3f, %6.3f"%(sig,popt[1], popt[1]*2.3))
         # plot AC of full ROI
         PlotFullAC(11, Xratio,allAC,popt,alpha,sig,sigsm,initialD,A)
@@ -520,21 +546,37 @@ for targetname in [nucleus]:
                 print("fit 2 in: sig, alpha, ys, Nacf %6.3f %6.3f %6.3f %d"%(sig,alpha,ys, Nacf))
                 print("fit 2 in: sigsm, sigsm0 %6.3f %6.3f"%(sigsm,sigsm0))
                 if fit2params:
+                    params=lmfit.Parameters()
+                    params.add('D',value=initialD, min=0.0)
+                    params.add('sign',value=sig,min=0.0)
+                    params.add('sigw',value=sigsm,min=0.0,vary=True)
+                    params.add('sigx',value=sigx,vary=False)
                     uncert=np.linspace(ACf[0]/10,ACf[0]/5,Nacf)
                     ACfx=ACf*np.exp(-Xac**2/(2.0*sigx**2))
-                    initial=1.0
-                    popt,pcov=curve_fit(fitf2, Xac, ACf, p0=[initial,sig])
+                    #initial=1.0
+                    popt,pcov=curve_fit(fitf2, Xac, ACfx, p0=[initialD,sig])
                     sig=popt[1]
-                    popt[0]*=initialD
-                    sige=np.sqrt(sig**2-sigsmn**2)
+                    #popt[0]*=initialD
+                    #minner=lmfit.Minimizer(fitforlm, params, fcn_args=(Xac,ACfx),
+                    #                       fcn_kws={'unc':uncert})
+                    #result=minner.minimize()
+                    #popt=[result.params['D'].value,result.params['sign'].value]
+                    #pcov=result.covar
+                    sig=popt[1]
+                    if sig>sigsmn:
+                        sige=np.sqrt(sig**2-sigsmn**2)
+                    else:
+                        sige=sigsmn
                     sigw=np.sqrt(sige**2+sigsm0**2)
                     #print("sigs",sig,sige,sigsm,sigw)
                     ys=sigw/sig
-                    sigsm=sigw
+                    ##sigsm=sigw
                     print("fit 2 out: sige, sig, ys %6.3f %6.3f %6.2f"%(sige,sig,ys))
                     if sige<sigsmn: continue
                 else:
                     popt,pcov=curve_fit(fitf, Xac, ACf, p0=[initialD])
+                #if not result.success: continue
+                #if result.covar is None: continue
                 # breakout 
                 # ----------------------
                 fitD=popt[0]#*(sig/sigaim)
