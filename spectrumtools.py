@@ -57,7 +57,7 @@ def findminmax(energy, data):
                 maxlist.append(data[i])
     return minenergy,maxenergy,minlist,maxlist
 
-def AC_theory( e, sign, sigw ):
+def AC_shape( e, sign, sigw ):
     """
     Theoretical function for autocorrelation.
     e: energy offset (MeV)
@@ -73,6 +73,87 @@ def AC_theory( e, sign, sigw ):
     #act+=(1.0/(sign*ys))*np.exp(-x*x/(4.*sign*sign*ys*ys))
     #act-=(1.0/sign)*np.sqrt(8./ysp)*np.exp(-x*x/(2.*sign*sign*ysp))
     return act
+
+def ACtheory(x, sign, sigw, alpha, D):
+    """
+    'Hansen' autocorrelation formula for spectrum
+    x: energy offset (MeV)
+    sign: narrow smooth or sigexpt, >= sigexpt
+    sigw: wide smooth
+    alpha: variance parameter
+    D: level spacing
+    11/7/2012: fix 4->2 in last term
+    """
+    sigtsq=sign**2+sigw**2
+    A=(alpha*D)/(2.0*np.sqrt(np.pi))
+    act=A*( np.exp(-x*x/(4.*sign*sign))/sign+
+            np.exp(-x*x/(4.*sigw*sigw))/sigw-
+            np.sqrt(8./sigtsq)*np.exp(-x*x/(2.*sigtsq))
+            )
+    return act
+
+def ACnoise(x, sign, sigw, dE, varn):
+    """
+    'Hansen' autocorrelation formula for noise
+    x: energy offset (MeV)
+    sign: narrow smooth or sigexpt, >= sigexpt
+    sigw: wide smooth
+    dE: level densityspectrum bin width
+    varn: relative noise variance parameter
+    """
+    sigtsq=sign**2+sigw**2
+    A=(dE*varn)/(2.0*np.sqrt(np.pi))
+    act=A*( np.exp(-x*x/(4.*sign*sign))/sign+
+            np.exp(-x*x/(4.*sigw*sigw))/sigw-
+            np.sqrt(8./sigtsq)*np.exp(-x*x/(2.*sigtsq))
+            )
+    return act
+    
+def ACnoise_nonsm(x, sign, sigw, dE, varn):
+    """
+    'Hansen' autocorrelation formula for noise with NO narrow smooth
+    x: energy offset (MeV)
+    sign: narrow smooth or sigexpt, >= sigexpt
+    sigw: wide smooth
+    dE: level densityspectrum bin width
+    varn: relative noise variance parameter
+    """
+    sigtsq=sigw**2
+    A=(dE*varn)/(2.0*np.sqrt(np.pi))
+    act=A*( np.exp(-x*x/(4.*sigw*sigw))/sigw-
+            np.sqrt(8.)*np.exp(-x*x/(2.*sigtsq))/sigw
+            )
+    return act
+    
+def autocorrelation(Gw):
+    """
+    calculate autocorrelation using Wiener-Kinchin thm.
+    return: Ac -- autocovariance
+            pwrs -- 'power spectrum', (simple).
+    """
+    Nfg=len(Gw)
+    fg=fft.fft(Gw-np.mean(Gw))
+    meand=np.mean(Gw)
+    pwrs=(fg*np.conjugate(fg)).real
+    Accomplex=(fft.ifft(fg*np.conjugate(fg))) / float(Nfg) #- 1.0
+    Ac=Accomplex.real/meand**2
+    return Ac, pwrs
+
+def crosscorrelation(Gw,Gv):
+    """
+    calculate autocorrelation.
+    return: Ac -- crosscorrelation
+            pwrs -- 'power spectrum', (simple).
+    """
+    Nfg=len(Gw)
+    fg=fft.fft(Gw-np.mean(Gw))
+    fh=fft.fft(Gv-np.mean(Gv))
+    meand=np.mean(Gw)
+    meandv=np.mean(Gv)
+    pwrs=(fg*np.conjugate(fh)).real
+    Accomplex=(fft.ifft(fh*np.conjugate(fg))) / float(Nfg) #- 1.0
+    Ac=Accomplex.real #/(meand*meandv)
+    return Ac, pwrs
 
     
 
@@ -247,7 +328,7 @@ class Bin(object):
         varnoise0 = self.acraw[0]-self.acraw[1]
         #print(de, signoise, sigsm, varnoise0)
         varnoisesm = varnoise0/(2.0*np.sqrt(np.pi)*(signoise/de))
-        noisecorrection = varnoisesm*signoise*AC_theory(self.Eoffset, signoise, sigsm)
+        noisecorrection = varnoisesm*signoise*AC_shape(self.Eoffset, signoise, sigsm)
         return noisecorrection
          
         
@@ -267,13 +348,18 @@ def findstore(subdir):
     return pf.as_posix()+"/"
 
 import numpy.fft as fft
-def autocorrelation(Gw):
+def autocorrelation(Gw,pad=False):
     """
     calculate autocorrelation.
     """
-    fg=fft.fft(Gw-np.mean(Gw))
-    Nfg=len(Gw)
     meand=np.mean(Gw)
+    Nfg=len(Gw)
+    if pad:
+        Gww=np.ones(2*Nfg)*meand
+        Gww[0:Nfg]=Gw
+    else:
+        Gww=Gw
+    fg=fft.fft(Gw-np.mean(Gww))
     pwspec=fg*np.conjugate(fg)
     Accomplex=(fft.ifft(pwspec.real)) / float(Nfg) #- 1.0
     Ac=Accomplex.real/meand**2
